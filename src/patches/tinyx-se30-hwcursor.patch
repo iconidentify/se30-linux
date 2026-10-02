@@ -1,0 +1,267 @@
+--- a/kdrive/fbdev/fbdev.c	2026-10-01 16:33:11.854018599 -0700
++++ b/kdrive/fbdev/fbdev.c	2026-10-01 16:33:34.387951028 -0700
+@@ -25,6 +25,8 @@
+ #include <kdrive-config.h>
+ #endif
+ #include "fbdev.h"
++#include <signal.h>
++#include "cursorstr.h"
+ #include <sys/ioctl.h>
+ 
+ #include <errno.h>
+@@ -387,6 +389,222 @@
+ 	return TRUE;
+ }
+ 
++
++/*
++ * "Hardware" cursor for the Mac's 1 bpp screen (MONO01, shadowed). It is
++ * drawn straight onto the real framebuffer, above the shadow, and miPointer
++ * moves it from the input signal handler, so it follows the mouse even
++ * while the server is busy, like the Mac ROM's VBL cursor. Erasing it just
++ * recopies that area from the shadow.
++ */
++#define CUR_MAX 32
++
++static struct {
++	Bool have;		/* a cursor is set */
++	Bool shown;		/* currently drawn on the framebuffer */
++	int x, y;		/* hotspot position */
++	int w, h, xhot, yhot;
++	CARD32 src[CUR_MAX], msk[CUR_MAX];	/* rows, MSB = leftmost pixel */
++	Bool fgBlack, bgBlack;
++} cur;
++
++static void curBlockSigio(sigset_t *old)
++{
++	sigset_t set;
++
++	sigemptyset(&set);
++	sigaddset(&set, SIGIO);
++	sigprocmask(SIG_BLOCK, &set, old);
++}
++
++static void curRestoreSigio(sigset_t *old)
++{
++	sigprocmask(SIG_SETMASK, old, 0);
++}
++
++/* Copy a rectangle of the shadow to a MONO01 screen, inverted. */
++static void fbdevCopyInvert(ScreenPtr pScreen, int x1, int y1, int x2, int y2)
++{
++	KdScreenPriv(pScreen);
++	KdScreenInfo *screen = pScreenPriv->screen;
++	FbdevPriv *priv = pScreenPriv->card->driver;
++	int bx1, bx2, y, i;
++
++	if (x1 < 0)
++		x1 = 0;
++	if (y1 < 0)
++		y1 = 0;
++	if (x2 > screen->width)
++		x2 = screen->width;
++	if (y2 > screen->height)
++		y2 = screen->height;
++	if (x1 >= x2 || y1 >= y2)
++		return;
++	bx1 = x1 >> 3;
++	bx2 = (x2 + 7) >> 3;
++	for (y = y1; y < y2; y++) {
++		CARD8 *s = (CARD8 *) screen->fb.frameBuffer +
++			   y * screen->fb.byteStride + bx1;
++		CARD8 *d = (CARD8 *) priv->fb + y * priv->fix.line_length + bx1;
++
++		for (i = bx1; i < bx2; i++)
++			*d++ = ~*s++;
++	}
++}
++
++static void curDraw(ScreenPtr pScreen)
++{
++	KdScreenPriv(pScreen);
++	KdScreenInfo *screen = pScreenPriv->screen;
++	FbdevPriv *priv = pScreenPriv->card->driver;
++	int r, c, x0, y0;
++
++	if (!cur.have || !pScreenPriv->enabled)
++		return;
++	x0 = cur.x - cur.xhot;
++	y0 = cur.y - cur.yhot;
++	for (r = 0; r < cur.h; r++) {
++		int y = y0 + r;
++		CARD8 *row;
++
++		if (y < 0 || y >= screen->height || !cur.msk[r])
++			continue;
++		row = (CARD8 *) priv->fb + y * priv->fix.line_length;
++		for (c = 0; c < cur.w; c++) {
++			int x = x0 + c;
++			CARD32 bit = 0x80000000UL >> c;
++
++			if (x < 0 || x >= screen->width || !(cur.msk[r] & bit))
++				continue;
++			if ((cur.src[r] & bit) ? cur.fgBlack : cur.bgBlack)
++				row[x >> 3] |= 0x80 >> (x & 7);
++			else
++				row[x >> 3] &= ~(0x80 >> (x & 7));
++		}
++	}
++	cur.shown = TRUE;
++}
++
++static void curErase(ScreenPtr pScreen)
++{
++	if (cur.shown)
++		fbdevCopyInvert(pScreen, cur.x - cur.xhot, cur.y - cur.yhot,
++				cur.x - cur.xhot + cur.w, cur.y - cur.yhot + cur.h);
++	cur.shown = FALSE;
++}
++
++/* Does the drawn cursor overlap this box? */
++static Bool curOverlaps(BoxPtr b)
++{
++	int x1 = cur.x - cur.xhot, y1 = cur.y - cur.yhot;
++
++	return cur.shown && b->x1 < x1 + cur.w && b->x2 > x1 &&
++	       b->y1 < y1 + cur.h && b->y2 > y1;
++}
++
++static Bool fbdevRealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
++{
++	return TRUE;
++}
++
++static Bool fbdevUnrealizeCursor(ScreenPtr pScreen, CursorPtr pCursor)
++{
++	return TRUE;
++}
++
++static void fbdevSetCursor(ScreenPtr pScreen, CursorPtr pCursor, int x, int y)
++{
++	sigset_t old;
++
++	curBlockSigio(&old);
++	curErase(pScreen);
++	cur.x = x;
++	cur.y = y;
++	cur.have = FALSE;
++	if (pCursor) {
++		CursorBitsPtr bits = pCursor->bits;
++		int stride = BitmapBytePad(bits->width);
++		int r, b;
++
++		cur.w = bits->width < CUR_MAX ? bits->width : CUR_MAX;
++		cur.h = bits->height < CUR_MAX ? bits->height : CUR_MAX;
++		cur.xhot = bits->xhot;
++		cur.yhot = bits->yhot;
++		for (r = 0; r < cur.h; r++) {
++			CARD32 sb = 0, mb = 0;
++
++			for (b = 0; b < 4 && b < stride; b++) {
++				sb |= (CARD32) bits->source[r * stride + b] << (24 - 8 * b);
++				mb |= (CARD32) bits->mask[r * stride + b] << (24 - 8 * b);
++			}
++			cur.src[r] = sb;
++			cur.msk[r] = mb;
++		}
++		cur.fgBlack = pCursor->foreRed / 3 + pCursor->foreGreen / 3 +
++			      pCursor->foreBlue / 3 < 32768;
++		cur.bgBlack = pCursor->backRed / 3 + pCursor->backGreen / 3 +
++			      pCursor->backBlue / 3 < 32768;
++		cur.have = TRUE;
++		curDraw(pScreen);
++	}
++	curRestoreSigio(&old);
++}
++
++/* Called from the input signal handler as the mouse moves. */
++static void fbdevMoveCursor(ScreenPtr pScreen, int x, int y)
++{
++	sigset_t old;
++
++	if (x == cur.x && y == cur.y)
++		return;
++	curBlockSigio(&old);
++	curErase(pScreen);
++	cur.x = x;
++	cur.y = y;
++	curDraw(pScreen);
++	curRestoreSigio(&old);
++}
++
++static miPointerSpriteFuncRec fbdevPointerSpriteFuncs = {
++	fbdevRealizeCursor,
++	fbdevUnrealizeCursor,
++	fbdevSetCursor,
++	fbdevMoveCursor,
++};
++
++Bool fbdevInitCursor(ScreenPtr pScreen)
++{
++	KdScreenPriv(pScreen);
++	FbdevPriv *priv = pScreenPriv->card->driver;
++
++	/* only the shadowed mono screen; others keep the software cursor */
++	if (!priv->mono_invert)
++		return FALSE;
++	return miPointerInitialize(pScreen, &fbdevPointerSpriteFuncs,
++				   &kdPointerScreenFuncs, FALSE);
++}
++
++void fbdevEnableCursor(ScreenPtr pScreen)
++{
++	sigset_t old;
++
++	curBlockSigio(&old);
++	curDraw(pScreen);
++	curRestoreSigio(&old);
++}
++
++void fbdevDisableCursor(ScreenPtr pScreen)
++{
++	/* the console owns the framebuffer now */
++	cur.shown = FALSE;
++}
++
++void fbdevFiniCursor(ScreenPtr pScreen)
++{
++	cur.have = FALSE;
++	cur.shown = FALSE;
++}
++
+ /* Copy damaged areas of the 1 bpp shadow to a MONO01 screen, inverted. */
+ static void fbdevUpdateInvert(ScreenPtr pScreen, shadowBufPtr pBuf)
+ {
+@@ -398,9 +616,15 @@
+ 	FbStride shaStride;
+ 	int shaBpp, shaXoff _X_UNUSED, shaYoff _X_UNUSED;
+ 
++	sigset_t old;
++	Bool redraw = FALSE;
++
+ 	fbGetDrawable(&pShadow->drawable, shaBase, shaStride, shaBpp, shaXoff,
+ 		      shaYoff);
++	curBlockSigio(&old);
+ 	for (; nbox--; pbox++) {
++		if (curOverlaps(pbox))
++			redraw = TRUE;
+ 		int x0 = pbox->x1 >> 3, x1 = (pbox->x2 + 7) >> 3, y, i;
+ 
+ 		for (y = pbox->y1; y < pbox->y2; y++) {
+@@ -411,11 +635,15 @@
+ 						      &winSize, pBuf->closure);
+ 
+ 			if (!win)
+-				return;
++				goto out;
+ 			for (i = 0; i < x1 - x0; i++)
+ 				win[i] = ~sha[i];
+ 		}
+ 	}
++	if (redraw)
++		curDraw(pScreen);
++out:
++	curRestoreSigio(&old);
+ }
+ 
+ static Bool fbdevSetShadow(ScreenPtr pScreen)

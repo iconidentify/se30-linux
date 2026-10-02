@@ -1,0 +1,13 @@
+# Card images contain Apple's System 7.1, and the backups are personal:
+# never commit them. Built binaries go in GitHub releases.
+*.img
+*.img.zst
+*.img.sha256
+mac/*.bin
+mac/*.hqx
+mac/vmlinux.gz
+# Notes on our own card (local only)
+CARD-NOTES.md
+# Built binaries (xbuild-tinyx.sh, rxvt 2.6.4) go here when building
+src/build/debian-overlay/usr/local/bin/Xfbdev
+src/build/debian-overlay/usr/local/bin/rxvt

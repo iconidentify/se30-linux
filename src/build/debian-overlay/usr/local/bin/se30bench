@@ -1,0 +1,110 @@
+#!/bin/sh
+# se30bench: time common operations on the SE/30.
+# Prints "BENCH <name> <centiseconds>" lines, then "BENCH done".
+# Usage: se30bench [-x|-t|-c]  (-x times the Xvfb server, -t times TinyX
+#        Xfbdev, -c only measures TinyX cursor latency; needs cursortest)
+
+now() {
+    read up _ < /proc/uptime
+    up=${up%.*}${up#*.}
+    up=${up#"${up%%[!0]*}"}
+    NOW=${up:-0}
+}
+
+bench() {
+    name=$1; shift
+    now; start=$NOW
+    "$@" >/dev/null 2>&1
+    now
+    echo "BENCH $name $((NOW - start))"
+}
+
+repeat() {
+    n=$1; shift
+    i=0
+    while [ $i -lt "$n" ]; do "$@"; i=$((i + 1)); done
+}
+
+cold() {
+    sync
+    echo 3 > /proc/sys/vm/drop_caches
+}
+
+shell_loop() {
+    i=0
+    while [ $i -lt 2000 ]; do i=$((i + 1)); done
+}
+
+if [ "$1" = -c ]; then
+    # cursor latency: idle, under CPU load, and under load with X at nice -10
+    # stream runs: time for the cursor to catch up after 1 s of steady motion
+    for run in "idle 0 15" "load 0 15" "load -10 15" "idle 0 0" "load 0 0"; do
+        set -- $run
+        out=$(TRIALS=$3 XNICE=$2 cursortest $([ "$1" = load ] && echo load) | grep SUMMARY)
+        tag="cursor_$1"; [ "$2" != 0 ] && tag="${tag}_xnice$2"; [ "$3" = 0 ] && tag="drain_$1"
+        for f in $out; do
+            case $f in
+                median=*) v=${f#median=}; echo "BENCH ${tag}_median_ms ${v%%.*}" ;;
+                p90=*) v=${f#p90=}; echo "BENCH ${tag}_p90_ms ${v%%.*}" ;;
+            esac
+        done
+    done
+    echo "BENCH done"
+    exit 0
+fi
+
+[ -s /run/boot-time ] && echo "BENCH boot_to_rcs_done $(cat /run/boot-time)"
+
+# Process start: dynamic glibc binaries vs. the static BusyBox
+/usr/bin/true; busybox true
+bench spawn_dynamic_x10 repeat 10 /usr/bin/true
+bench spawn_busybox_x10 repeat 10 busybox true
+bench bash_login bash -lc exit
+bench ash_login busybox sh -lc exit
+bench ls_dynamic ls -l /usr/bin
+bench ls_busybox busybox ls -l /usr/bin
+bench shell_loop_2000 shell_loop
+bench syscalls_40k busybox dd if=/dev/zero of=/dev/null bs=1 count=20000
+
+# Disk (cold cache)
+cold
+bench disk_read_4mb busybox dd if=/dev/sda4 of=/dev/null bs=64k count=64
+bench disk_write_2mb busybox dd if=/dev/zero of=/root/.benchfile bs=64k count=32 conv=fsync
+rm -f /root/.benchfile
+cold
+bench cold_bash_login bash -lc exit
+
+if [ "$1" = -x ]; then
+    pkill -x Xvfb; sleep 3
+    cold
+    now; start=$NOW
+    setsid /usr/local/bin/xserver >/var/log/Xvfb.log 2>&1 < /dev/null &
+    until [ -s /run/xvfb/ready ]; do sleep 1; done
+    now; echo "BENCH x_server_ready $((NOW - start))"
+    export DISPLAY=:0
+    bench x_xsetroot xsetroot -grey
+    bench x_xterm_cold xterm -geometry 20x2 -e true
+    bench x_xterm_warm xterm -geometry 20x2 -e true
+fi
+
+if [ "$1" = -t ]; then
+    pkill -x Xvfb; pkill -x Xfbdev; sleep 3
+    rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+    cold
+    now; start=$NOW
+    setsid Xfbdev :0 -nolisten tcp >/var/log/Xfbdev.log 2>&1 < /dev/null &
+    export DISPLAY=:0
+    # a client's connection completes once the server has finished starting
+    until xsetroot -grey 2>/dev/null; do sleep 1; done
+    now; echo "BENCH x_server_ready $((NOW - start))"
+    bench x_xsetroot xsetroot -grey
+    bench x_xterm_cold xterm -geometry 20x2 -e true
+    bench x_xterm_warm xterm -geometry 20x2 -e true
+    [ -x /usr/local/bin/rxvt ] && bench x_rxvt_warm rxvt -geometry 20x2 -e true
+    echo "BENCH x_server_rss_kb $(grep VmRSS /proc/$(pgrep -x Xfbdev)/status | awk '{print $2}')"
+fi
+
+set -- $(grep -E '^(MemTotal|MemAvailable):' /proc/meminfo)
+echo "BENCH mem_total_kb $2"
+echo "BENCH mem_available_kb $5"
+echo "BENCH done"

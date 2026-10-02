@@ -1,0 +1,44 @@
+--- a/arch/m68k/kernel/entry.S	2026-09-25 07:37:14.000000000 -0700
++++ b/arch/m68k/kernel/entry.S	2026-10-01 14:27:36.863838638 -0700
+@@ -200,6 +200,22 @@
+ 	jra	.Lret_from_exception
+ 
+ ENTRY(system_call)
++#ifdef CONFIG_MMU
++	| Fast path for get_thread_area: glibc reads its thread pointer with
++	| this syscall on every TLS access (errno, malloc, stdio...). Return
++	| the value from thread_info without building a full frame; it has
++	| no side effects to trace.
++	cmpl	#__NR_get_thread_area,%d0
++	jne	.Lsyscall_full
++	movel	%a0,%sp@-
++	movel	%sp,%d0
++	andl	#-THREAD_SIZE,%d0
++	movel	%d0,%a0
++	movel	%a0@(TINFO_TP_VALUE),%d0
++	movel	%sp@+,%a0
++	rte
++.Lsyscall_full:
++#endif
+ 	SAVE_ALL_SYS
+ 
+ 	GET_CURRENT(%d1)
+@@ -213,7 +229,7 @@
+ 	jmi	do_trace_entry
+ 	| seccomp filter active?
+ 	btst	#5,%a1@(TINFO_FLAGS+2)
+-	bnes	do_trace_entry
++	jne	do_trace_entry
+ 	cmpl	#NR_syscalls,%d0
+ 	jcc	badsys
+ syscall:
+--- a/arch/m68k/kernel/asm-offsets.c	2026-09-25 07:37:14.000000000 -0700
++++ b/arch/m68k/kernel/asm-offsets.c	2026-10-01 13:13:37.152550860 -0700
+@@ -42,6 +42,7 @@
+ 	/* offsets into the thread_info struct */
+ 	DEFINE(TINFO_PREEMPT, offsetof(struct thread_info, preempt_count));
+ 	DEFINE(TINFO_FLAGS, offsetof(struct thread_info, flags));
++	DEFINE(TINFO_TP_VALUE, offsetof(struct thread_info, tp_value));
+ 
+ 	/* offsets into the pt_regs */
+ 	DEFINE(PT_OFF_D0, offsetof(struct pt_regs, d0));

@@ -1,0 +1,5 @@
+
+  Linux on the Macintosh SE/30  -  Debian m68k + BusyBox
+  startx: X with twm + rxvt    |   Network: /etc/network.conf
+  Shut down: poweroff          |   Logs: logread
+

@@ -1,0 +1,29 @@
+Linux 7.2.8 for the Macintosh SE/30
+
+This disk has two partitions: this Mac volume (System 7.1, 256 MB) and a
+1.6 GB Linux root partition (Debian m68k) that Mac OS doesn't show.
+
+Booting
+  1. Memory control panel: 32-Bit Addressing On, then restart.
+  2. Open Penguin 19 and choose Boot Now (Cmd-B). Kernel and command line
+     are already set. Penguin asks for 40 MB of memory.
+  3. If Penguin 19 says "Failure while reading MMU tables", use Penguin 17:
+     Cmd-T, tick "Use old RAM detection", OK, then Cmd-B.
+
+Faster disk (try this)
+  The command line has mac_scsi.setup_use_pdma=0, which turns off SCSI
+  pseudo-DMA. Deleting it (Cmd-T, Options, then Cmd-D to save) should make
+  the disk several times faster. If Linux hangs or crashes while scanning
+  SCSI, put it back.
+
+In Linux
+  - Root shell on the screen. Root has no password.
+  - Network: 10.1.1.214, the same address A/UX uses. "telnet 10.1.1.214".
+    Settings: /etc/network.conf
+  - startx: X on the Mac screen (TinyX), twm and an rxvt terminal. Click the
+    desktop for the menu; Exit X is at the bottom. Option-click = middle
+    button (paste), Control-click = right button.
+  - startx-xvfb: the older, slower X setup, kept as a fallback.
+  - se30bench: timing tests (useful for comparing settings).
+  - Serial login on the modem port, 9600 baud. Type "poweroff" before
+    switching off.

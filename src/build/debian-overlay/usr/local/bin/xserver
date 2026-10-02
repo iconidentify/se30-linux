@@ -1,0 +1,18 @@
+#!/bin/sh
+# xserver: run the X server (Xvfb :0) sized for the Mac's screen. rcS starts
+# it at boot because it takes several minutes to initialize on a 68030;
+# startx then attaches the screen and input to it with se30fb.
+SIZE=$(cat /sys/class/graphics/fb0/virtual_size)
+BPP=$(cat /sys/class/graphics/fb0/bits_per_pixel)
+W=${SIZE%,*} H=${SIZE#*,}
+# Xvfb can't run at depth 1: on a mono screen use 8-bit gray, dithered by se30fb
+DEPTH=$BPP VIS=""
+[ "$BPP" = 1 ] && DEPTH=8 VIS="-cc 0"
+
+mkdir -p /run/xvfb
+rm -f /run/xvfb/ready
+# No GLX (it loads Mesa) or RENDER (unused by twm and xterm's core fonts),
+# and only the bitmap fonts this setup uses. -displayfd reports readiness.
+exec Xvfb :0 -screen 0 "${W}x${H}x${DEPTH}" $VIS -fbdir /run/xvfb -nolisten tcp \
+    -extension GLX -extension RENDER -fp /usr/share/fonts/X11/misc,built-ins \
+    -displayfd 3 3>/run/xvfb/ready

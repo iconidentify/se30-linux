@@ -1,0 +1,26 @@
+# /etc/profile: login shells. Debian's version runs id and run-parts, which
+# take about a second on a 68030; this sets the same things without them.
+# /usr/local/bb holds static BusyBox versions of everyday commands, which
+# start about twice as fast as the dynamically linked GNU ones (still in
+# /usr/bin; remove /usr/local/bb from PATH to prefer them).
+PATH=/usr/local/bb:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+if [ "${PS1-}" ]; then
+    if [ "${BASH-}" ] && [ "$BASH" != /bin/sh ]; then
+        # BusyBox init starts the console shell with SHELL=/bin/sh, so
+        # terminals opened from it (rxvt, xterm) would run dash. Say bash.
+        SHELL=$BASH
+        export SHELL
+        [ -f /etc/bash.bashrc ] && . /etc/bash.bashrc
+    else
+        # dash and BusyBox sh don't know bash's \u \h \w, but expand $PWD
+        # each time they print the prompt.
+        PS1="$(id -un 2>/dev/null || echo root)@$(hostname 2>/dev/null || echo se30):"'${PWD}'"$([ "$(id -u 2>/dev/null)" = 0 ] && echo '#' || echo '$') "
+    fi
+fi
+
+for i in /etc/profile.d/*.sh; do
+    [ -r "$i" ] && . "$i"
+done
+unset i

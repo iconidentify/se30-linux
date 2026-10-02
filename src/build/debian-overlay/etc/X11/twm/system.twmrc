@@ -1,0 +1,76 @@
+# twm for the SE/30's 1-bit screen. Only pure black and white: any gray is
+# dithered into a dot pattern, which makes text drawn over it unreadable.
+NoGrabServer
+RestartPreviousState
+DecorateTransients
+NoHighlight
+NoTitleHighlight
+BorderWidth 1
+FramePadding 1
+TitleFont "-misc-fixed-bold-r-normal--13-*-*-*-*-*-iso8859-1"
+ResizeFont "-misc-fixed-bold-r-normal--13-*-*-*-*-*-iso8859-1"
+MenuFont "-misc-fixed-bold-r-normal--13-*-*-*-*-*-iso8859-1"
+IconFont "-misc-fixed-medium-r-normal--10-*-*-*-*-*-iso8859-1"
+IconManagerFont "-misc-fixed-medium-r-normal--10-*-*-*-*-*-iso8859-1"
+
+Color
+{
+    BorderColor "black"
+    BorderTileForeground "black"
+    BorderTileBackground "white"
+    DefaultBackground "white"
+    DefaultForeground "black"
+    TitleBackground "white"
+    TitleForeground "black"
+    MenuBackground "white"
+    MenuForeground "black"
+    MenuTitleBackground "black"
+    MenuTitleForeground "white"
+    MenuShadowColor "black"
+    IconBackground "white"
+    IconForeground "black"
+    IconBorderColor "black"
+    IconManagerBackground "white"
+    IconManagerForeground "black"
+}
+Monochrome
+{
+    BorderColor "black"
+    TitleBackground "white"
+    TitleForeground "black"
+    MenuBackground "white"
+    MenuForeground "black"
+    MenuTitleBackground "black"
+    MenuTitleForeground "white"
+}
+
+# The Mac mouse has one button: click the desktop for the menu.
+# (se30fb sends Option-click as button 2 and Command-click as button 3.)
+Button1 = : root : f.menu "main"
+Button3 = : root : f.menu "main"
+Button1 = : title : f.function "move-or-raise"
+Button2 = : title : f.raiselower
+Button1 = : icon : f.function "move-or-iconify"
+Button1 = : iconmgr : f.iconify
+
+Function "move-or-raise" { f.move f.deltastop f.raise }
+Function "move-or-iconify" { f.move f.deltastop f.iconify }
+
+menu "main"
+{
+    "SE/30"         f.title
+    "Terminal"      f.exec "rxvt -fn 6x13 -ls &"
+    "Large Terminal" f.exec "rxvt -fn 9x15 -geometry 54x20 -ls &"
+    "XTerm"         f.exec "xterm -ls &"
+    ""              f.nop
+    "Raise"         f.raise
+    "Lower"         f.lower
+    "Move"          f.move
+    "Resize"        f.resize
+    "Iconify"       f.iconify
+    "Close"         f.delete
+    ""              f.nop
+    "Refresh"       f.refresh
+    "Restart twm"   f.restart
+    "Exit X"        f.quit
+}

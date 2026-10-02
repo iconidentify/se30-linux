@@ -1,0 +1,5 @@
+#!/bin/sh
+W=$(dirname "$0"); before=$(sudo stat -c %s "$W/serial.log")
+printf '%s\r' "$1" | sudo tee "$W/ctl/serial_in.tmp" >/dev/null && sudo mv "$W/ctl/serial_in.tmp" "$W/ctl/serial_in"
+"$W/mc" "wait ${2:-10}" >/dev/null
+sudo tail -c +$((before + 1)) "$W/serial.log" | tr -d '\r'

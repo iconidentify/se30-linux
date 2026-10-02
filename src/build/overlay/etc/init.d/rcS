@@ -1,0 +1,31 @@
+#!/bin/sh
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+grep -q ' /dev ' /proc/mounts || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs -o size=4m tmpfs /run
+mount -o remount,rw /
+hostname -F /etc/hostname
+ifconfig lo 127.0.0.1 up
+syslogd -C64
+klogd
+
+# Network: settings in /etc/network.conf; DHCP runs in the background
+. /etc/network.conf
+if [ -e /sys/class/net/eth0 ]; then
+    if [ "$MODE" = dhcp ]; then
+        ifconfig eth0 up
+        udhcpc -i eth0 -S -t 3 -T 3 -A 60 >/dev/null 2>&1 &
+    else
+        ifconfig eth0 "$IP" netmask "$NETMASK" up
+        route add default gw "$GATEWAY" dev eth0
+        echo "nameserver $DNS" > /etc/resolv.conf
+        echo "se30: eth0 is $IP (telnet $IP)"
+    fi
+else
+    echo "se30: no Ethernet card found"
+fi
+telnetd
+
+[ -x /etc/rc.local ] && /etc/rc.local

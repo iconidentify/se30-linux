@@ -1,0 +1,17 @@
+spawn_dynamic_x10 468
+spawn_busybox_x10 188
+bash_login 243
+ash_login 683
+ls_dynamic 1115
+ls_busybox 552
+shell_loop_2000 2177
+syscalls_40k 866
+disk_read_4mb 13093
+disk_write_2mb 7517
+cold_bash_login 3354
+x_server_ready 41129
+x_xsetroot 2128
+x_xterm_cold 14134
+x_xterm_warm 4668
+mem_total_kb 58972
+mem_available_kb 42660

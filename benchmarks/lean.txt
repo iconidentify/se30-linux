@@ -1,0 +1,11 @@
+spawn_dynamic_x10 275
+spawn_busybox_x10 230
+bash_login 238
+ash_login 883
+ls_dynamic 1106
+ls_busybox 544
+shell_loop_2000 1868
+syscalls_40k 1109
+disk_read_4mb 13020
+disk_write_2mb 7473
+cold_bash_login 3307

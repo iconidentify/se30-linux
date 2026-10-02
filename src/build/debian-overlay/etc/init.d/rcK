@@ -1,0 +1,14 @@
+#!/bin/sh
+# Stop everything so the root filesystem can go read-only before power-off.
+# kill must be the shell builtin: "kill -1" spares only the calling process.
+trap '' TERM HUP INT
+kill -TERM -1 2>/dev/null
+sleep 2
+kill -KILL -1 2>/dev/null
+sleep 1
+sync
+for i in 1 2 3 4 5; do
+    mount -o remount,ro / 2>/dev/null && exit 0
+    sleep 1
+done
+echo "rcK: couldn't remount / read-only; the journal will replay at next boot"

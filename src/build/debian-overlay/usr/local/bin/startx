@@ -1,0 +1,16 @@
+#!/bin/sh
+# startx: X on the Mac's screen with TinyX (Xfbdev, native 1 bpp), twm and an
+# rxvt. Click the desktop for the twm menu; "Exit X" returns to the console.
+# startx-xvfb is the older Xvfb-based setup.
+export DISPLAY=:0
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+Xfbdev :0 -nolisten tcp >/var/log/Xfbdev.log 2>&1 &
+XPID=$!
+trap 'kill $XPID 2>/dev/null' EXIT INT TERM
+# a client's connection completes once the server has finished starting
+until xsetroot -grey 2>/dev/null; do
+    kill -0 $XPID 2>/dev/null || { echo "startx: X died, see /var/log/Xfbdev.log"; exit 1; }
+    sleep 1
+done
+rxvt -fn 6x13 -geometry 80x24+4+24 -T SE/30 -ls &
+twm

@@ -1,0 +1,24 @@
+#!/bin/sh
+# startx-xvfb: the older X setup - Xvfb drawn to the screen by se30fb, with
+# twm and an xterm. startx (TinyX) is faster; this is kept as a fallback.
+# The X server keeps running after "Exit X" so the next start is quick.
+export DISPLAY=:0
+if ! pgrep -x Xvfb >/dev/null; then
+    setsid nice -n 10 /usr/local/bin/xserver >/var/log/Xvfb.log 2>&1 < /dev/null &
+fi
+if [ ! -s /run/xvfb/ready ]; then
+    printf 'startx: waiting for the X server to finish starting'
+    until [ -s /run/xvfb/ready ]; do
+        if ! pgrep -x Xvfb >/dev/null; then
+            echo; echo "startx: the X server died, see /var/log/Xvfb.log"; exit 1
+        fi
+        printf '.'; sleep 5
+    done
+    echo
+fi
+se30fb /run/xvfb/Xvfb_screen0 &
+FBPID=$!
+trap 'kill $FBPID 2>/dev/null' EXIT INT TERM
+xsetroot -grey
+pgrep -x xterm >/dev/null || xterm -geometry 80x24+4+24 -T SE/30 -ls &
+twm

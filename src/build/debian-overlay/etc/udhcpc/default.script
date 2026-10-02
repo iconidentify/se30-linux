@@ -1,0 +1,18 @@
+#!/bin/sh
+case "$1" in
+    deconfig)
+        busybox ifconfig "$interface" 0.0.0.0 up
+        ;;
+    bound|renew)
+        busybox ifconfig "$interface" "$ip" netmask "${subnet:-255.255.255.0}" up
+        while busybox route del default dev "$interface" 2>/dev/null; do :; done
+        for r in $router; do
+            busybox route add default gw "$r" dev "$interface"
+        done
+        : > /etc/resolv.conf
+        [ -n "$domain" ] && echo "search $domain" >> /etc/resolv.conf
+        for d in $dns; do
+            echo "nameserver $d" >> /etc/resolv.conf
+        done
+        ;;
+esac

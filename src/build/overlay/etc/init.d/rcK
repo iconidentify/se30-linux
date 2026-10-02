@@ -1,0 +1,7 @@
+#!/bin/sh
+# Stop everything so the root filesystem can go read-only before power-off.
+kill -TERM -1 2>/dev/null
+sleep 1
+kill -KILL -1 2>/dev/null
+sync
+mount -o remount,ro / || umount -a -r

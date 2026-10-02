@@ -1,0 +1,5 @@
+
+  Linux on the Macintosh SE/30  -  BusyBox rescue system (in RAM)
+  No se30root disk was found; changes are lost at power-off.
+  Network: /etc/network.conf   |   Shut down: poweroff
+

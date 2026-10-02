@@ -1,0 +1,42 @@
+Linux 7.2.8 and se30os for the Macintosh SE/30
+
+This disk has two partitions: this Mac volume (System 7.1, 256 MB) and a
+1.6 GB Linux root partition (Debian m68k) that Mac OS doesn't show.
+
+Booting Linux (the default)
+  1. Memory control panel: 32-Bit Addressing On, then restart.
+  2. Open Penguin 19 and choose Boot Now (Cmd-B). Kernel and command line
+     are already set. Penguin asks for 40 MB of memory.
+  3. If Penguin 19 says "Failure while reading MMU tables", use Penguin 17:
+     Cmd-T, tick "Use old RAM detection", OK, then Cmd-B.
+
+Booting se30os
+  In Penguin 19: Settings (Cmd-T), choose se30os.gz as the kernel, OK,
+  then Boot Now (Cmd-B). Choose vmlinux.gz again to go back to Linux.
+  se30os ignores Penguin's command line.
+  - A Mac-style desktop with terminal windows. Type "help" in one.
+  - telnet HOST, ping HOST, ip (address 10.1.1.214, gateway and DNS
+    10.1.1.1, the same as A/UX; "ip ADDRESS MASK GATEWAY DNS" to change)
+  - net: the Ethernet card and its counters. nubus: the slot cards.
+  - saver [EFFECT]: the Omarchy screen savers (Cmd-S); "saver list".
+  - Cmd-F: full-screen terminal. Cmd-N: new terminal. Ctrl-]: hang up.
+  - Switch off when you're done; nothing needs to be saved.
+
+Faster disk (try this)
+  The command line has mac_scsi.setup_use_pdma=0, which turns off SCSI
+  pseudo-DMA. Deleting it (Cmd-T, Options, then Cmd-D to save) should make
+  the disk several times faster. If Linux hangs or crashes while scanning
+  SCSI, put it back.
+
+In Linux
+  - Root shell on the screen. Root has no password.
+  - Network: 10.1.1.214, the same address A/UX uses. "telnet 10.1.1.214".
+    Settings: /etc/network.conf
+  - startx: X on the Mac screen (TinyX), twm and an rxvt terminal. Click the
+    desktop for the menu; Exit X is at the bottom. Option-click = middle
+    button (paste), Control-click = right button. The mouse pointer is
+    drawn as soon as the mouse moves, even while X is busy.
+  - startx-xvfb: the older, slower X setup, kept as a fallback.
+  - se30bench: timing tests (useful for comparing settings).
+  - Serial login on the modem port, 9600 baud. Type "poweroff" before
+    switching off.

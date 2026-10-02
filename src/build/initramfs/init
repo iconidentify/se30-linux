@@ -1,0 +1,30 @@
+#!/bin/sh
+# Early init embedded in the kernel. If a partition labelled se30root exists
+# (any SCSI ID), boot from it; otherwise keep running the BusyBox system that
+# is already here in RAM. Add "rescue" to the Penguin command line for a shell.
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+if grep -qw rescue /proc/cmdline; then
+    echo "se30: rescue requested"
+    exec setsid cttyhack sh
+fi
+
+root=
+for i in 1 2 3 4 5; do
+    root=$(findfs LABEL=se30root 2>/dev/null) && break
+    sleep 1
+done
+
+if [ -n "$root" ] && mount -t ext4 "$root" /newroot; then
+    echo "se30: root is $root"
+    umount /proc /sys
+    mount --move /dev /newroot/dev
+    exec switch_root /newroot /sbin/init
+fi
+
+echo "se30: no se30root disk, running from RAM (changes are lost at power-off)"
+umount /proc /sys
+exec /sbin/init

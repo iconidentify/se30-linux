@@ -1,0 +1,40 @@
+#!/bin/sh
+# System startup, run by BusyBox init (see /etc/inittab).
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+grep -q ' /dev ' /proc/mounts || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs -o mode=1777 tmpfs /dev/shm
+mount -t tmpfs -o size=4m,mode=755 tmpfs /run
+mount -o remount,rw /
+rm -f /tmp/.X*-lock /tmp/.X11-unix/X*
+hostname -F /etc/hostname
+busybox ifconfig lo 127.0.0.1 up
+busybox syslogd -C64
+busybox klogd
+
+# Network: settings in /etc/network.conf; DHCP runs in the background
+. /etc/network.conf
+if [ -e /sys/class/net/eth0 ]; then
+    if [ "$MODE" = dhcp ]; then
+        busybox ifconfig eth0 up
+        busybox udhcpc -i eth0 -S -t 3 -T 3 -A 60 >/dev/null 2>&1 &
+    else
+        busybox ifconfig eth0 "$IP" netmask "$NETMASK" up
+        busybox route add default gw "$GATEWAY" dev eth0
+        echo "nameserver $DNS" > /etc/resolv.conf
+        echo "se30: eth0 is $IP (telnet $IP)"
+    fi
+else
+    echo "se30: no Ethernet card found"
+fi
+busybox telnetd -l /usr/local/sbin/login
+
+
+[ -x /etc/rc.local ] && /etc/rc.local
+
+# Boot time in centiseconds, for se30bench
+read up _ < /proc/uptime
+echo "${up%.*}${up#*.}" | sed 's/^0*//' > /run/boot-time
+echo "se30: booted in ${up%.*} seconds"
